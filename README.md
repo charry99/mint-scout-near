@@ -66,11 +66,24 @@ npm test
 ```
 
 Live integration tests against real NEAR mainnet RPC endpoints. See
-[TESTS.md](TESTS.md) for recorded results.
+[TESTS.md](TESTS.md) for recorded results (7/7 pass as of 2026-11-06).
+
+## What NEAR can and cannot prove
+
+See [RESEARCH.md](RESEARCH.md) — NEP-330 source metadata, the
+SourceScan/NearBlocks verification flow (no public no-key API for its
+status), access-key upgradeability, and the honest limits (no
+reproduced-build re-run, no off-chain reputation, old-WASM view-call
+failures).
+
+## Git history
+
+- `1c964a5` — check engine + UI, no AI
+- `60fadd2` (branch `mint-scout-near`) — **first commit where Otari came in**: Otari client + `/api/explain` + UI wiring
 
 ## NEAR hackathon submission checklist
 
-- [ ] Working app (NEAR contract checker + Otari AI explanation)
+- [x] Working app (NEAR contract checker + Otari AI explanation)
 - [ ] Public GitHub repo + `mint-scout-near` branch
 - [ ] Push repo to GitHub (needs the user's GitHub account)
 - [ ] 3–5 min demo video (post on X, tag @NEARProtocol and #NEARHackathon)
