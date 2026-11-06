@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mint Scout NEAR — contract checker</title>
+<style>
+  :root { --bg:#0f1115; --card:#171a21; --text:#e8eaf0; --muted:#9aa3b2; --green:#2fbf71; --amber:#e8a13a; --red:#e5534b; --line:#262b36; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:24px 16px 64px; }
+  h1 { font-size:26px; margin:0 0 4px; }
+  p.sub { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:16px; }
+  label { display:block; font-size:13px; color:var(--muted); margin-bottom:6px; }
+  input[type=text] { width:100%; padding:12px; border-radius:8px; border:1px solid var(--line); background:#0f1115; color:var(--text); font-size:15px; }
+  button { background:#2f6feb; color:#fff; border:0; border-radius:8px; padding:12px 20px; font-size:15px; cursor:pointer; margin-top:14px; width:100%; }
+  button:disabled { opacity:.5; cursor:wait; }
+  .examples { margin-top:10px; font-size:13px; color:var(--muted); }
+  .examples button { width:auto; margin:4px 4px 0 0; padding:6px 10px; font-size:13px; background:#222834; }
+  .badge { display:inline-block; padding:6px 14px; border-radius:999px; font-weight:700; font-size:15px; }
+  .badge.VERIFIED { background:rgba(47,191,113,.18); color:var(--green); border:1px solid var(--green); }
+  .badge.NEEDS_REVIEW { background:rgba(232,161,58,.15); color:var(--amber); border:1px solid var(--amber); }
+  .badge.HIGH_RISK { background:rgba(229,83,75,.15); color:var(--red); border:1px solid var(--red); }
+  .badge.NOT_A_CONTRACT { background:rgba(154,163,178,.15); color:var(--muted); border:1px solid var(--muted); }
+  table { width:100%; border-collapse:collapse; font-size:14px; }
+  td { padding:8px 4px; border-bottom:1px solid var(--line); vertical-align:top; }
+  td.status { width:70px; font-weight:700; }
+  .pass { color:var(--green); } .fail { color:var(--red); } .unknown { color:var(--amber); }
+  .facts td:first-child { color:var(--muted); width:170px; }
+  .mono { font-family:ui-monospace,Menlo,monospace; font-size:13px; word-break:break-all; }
+  .hidden { display:none; }
+  .err { color:var(--red); }
+  footer { color:var(--muted); font-size:12px; text-align:center; margin-top:24px; }
+</style>
+</head>
+<body>
+<main>
+  <h1>🔍 Mint Scout NEAR</h1>
+  <p class="sub">Paste a NEAR account. Get a verdict — VERIFIED / NEEDS REVIEW / HIGH RISK — from NEP-330 source metadata, on-chain access keys and standards detection. No wallet, no signing, no transactions.</p>
+
+  <div class="card">
+    <label for="accountId">NEAR account</label>
+    <input type="text" id="accountId" placeholder="wrap.near" autocomplete="off" spellcheck="false">
+    <button id="checkBtn">Check contract</button>
+    <div class="examples">
+      Try:
+      <button data-acct="intents.near">intents.near</button>
+      <button data-acct="wrap.near">wrap.near</button>
+      <button data-acct="ref-finance.near">ref-finance.near</button>
+      <button data-acct="usdt.tether-token.near">USDT</button>
+      <button data-acct="illia.near">illia.near (wallet)</button>
+    </div>
+  </div>
+
+  <div id="result" class="hidden">
+    <div class="card">
+      <span id="verdictBadge" class="badge"></span>
+      <p id="summary" style="margin:12px 0 0;"></p>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px;">Checklist</h3>
+      <table id="checks"></table>
+    </div>
+    <div class="card">
+      <h3 style="margin:0 0 8px;">Contract facts</h3>
+      <table class="facts" id="facts"></table>
+    </div>
+  </div>
+  <div id="error" class="card hidden"><span class="err" id="errorText"></span></div>
+
+  <footer>Read-only checks only. A verdict is not financial advice — verification proves the code, not the project.</footer>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const statusIcon = { pass: '✓ PASS', fail: '✗ FAIL', unknown: '? UNKNOWN' };
+
+document.querySelectorAll('.examples button').forEach(b => {
+  b.addEventListener('click', () => { $('accountId').value = b.dataset.acct; runCheck(); });
+});
+$('checkBtn').addEventListener('click', runCheck);
+$('accountId').addEventListener('keydown', e => { if (e.key === 'Enter') runCheck(); });
+
+async function runCheck() {
+  const accountId = $('accountId').value.trim();
+  if (!accountId) return;
+  $('checkBtn').disabled = true;
+  $('checkBtn').textContent = 'Checking…';
+  $('result').classList.add('hidden');
+  $('error').classList.add('hidden');
+  try {
+    const res = await fetch('/api/check', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ accountId }),
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'Check failed');
+    showResult(data);
+  } catch (err) {
+    $('errorText').textContent = err.message;
+    $('error').classList.remove('hidden');
+  } finally {
+    $('checkBtn').disabled = false;
+    $('checkBtn').textContent = 'Check contract';
+  }
+}
+
+function showResult(data) {
+  const badge = $('verdictBadge');
+  if (data.kind === 'not_contract') {
+    badge.textContent = 'NOT A CONTRACT';
+    badge.className = 'badge NOT_A_CONTRACT';
+  } else {
+    badge.textContent = data.verdict;
+    badge.className = 'badge ' + data.verdict.replace(/ /g, '_');
+  }
+  $('summary').textContent = data.summary || '';
+  $('checks').innerHTML = (data.checks || []).map(c =>
+    `<tr><td class="status ${c.status}">${statusIcon[c.status] || c.status}</td><td><strong>${c.label}</strong><br><span style="color:var(--muted)">${c.detail || ''}</span></td></tr>`
+  ).join('');
+  const f = data.facts || {};
+  const meta = f.sourceMetadata || null;
+  const rows = [
+    ['Account', `<span class="mono">${f.accountId || ''}</span>`],
+    ['Code hash', f.codeHash ? `<span class="mono">${f.codeHash}</span>` : 'unknown'],
+    ['Balance', f.balanceNear !== null && f.balanceNear !== undefined ? `${f.balanceNear} NEAR` : 'unknown'],
+    ['Storage usage', f.storageUsage ?? 'unknown'],
+    ['Standards', (f.standards || []).join(', ') || 'none detected'],
+    ['Token', f.ft ? `${f.ft.name || '?'} (${f.ft.symbol || '?'})${f.ft.decimals !== null && f.ft.decimals !== undefined ? `, ${f.ft.decimals} decimals` : ''}` : (f.nft ? `NFT ${f.nft.name || '?'} (${f.nft.symbol || '?'})` : 'unknown')],
+    ['Total supply', f.ft && f.ft.totalSupply !== null && f.ft.totalSupply !== undefined ? f.ft.totalSupply : 'unknown'],
+    ['Source metadata', f.sourceMetadataStatus === 'present' ? (meta && meta.link ? `<a href="${meta.link}" target="_blank" rel="noopener" style="color:var(--text)"><span class="mono">${meta.link}</span></a>${meta.version ? ` (v${meta.version})` : ''}` : 'present, no link') : f.sourceMetadataStatus],
+    ['Full-access keys', f.fullAccessKeys !== null && f.fullAccessKeys !== undefined ? `${f.fullAccessKeys} of ${f.totalKeys ?? '?'} keys` : 'unknown'],
+    ['Deployments', f.deployments ? `${f.deployments.count} recorded${f.deployments.latest ? `, latest ${f.deployments.latest}` : ''}` : 'unknown'],
+  ];
+  $('facts').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
+  $('result').classList.remove('hidden');
+  window.scrollTo({ top: $('result').offsetTop - 12, behavior: 'smooth' });
+}
+</script>
+</body>
+</html>
