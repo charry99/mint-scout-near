@@ -66,6 +66,11 @@
       <h3 style="margin:0 0 8px;">Contract facts</h3>
       <table class="facts" id="facts"></table>
     </div>
+    <div class="card" id="aiCard">
+      <h3 style="margin:0 0 8px;">AI explanation <span style="font-weight:400;color:var(--muted);font-size:13px;">(Otari)</span></h3>
+      <p id="aiText" style="margin:0;color:var(--muted);">Asking Otari…</p>
+      <p id="aiModel" style="margin:8px 0 0;color:var(--muted);font-size:12px;"></p>
+    </div>
   </div>
   <div id="error" class="card hidden"><span class="err" id="errorText"></span></div>
 
@@ -136,6 +141,31 @@ function showResult(data) {
   $('facts').innerHTML = rows.map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
   $('result').classList.remove('hidden');
   window.scrollTo({ top: $('result').offsetTop - 12, behavior: 'smooth' });
+  explainWithOtari(data);
+}
+
+async function explainWithOtari(checkResult) {
+  $('aiText').textContent = 'Asking Otari…';
+  $('aiModel').textContent = '';
+  try {
+    const res = await fetch('/api/explain', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ checkResult }),
+    });
+    const data = await res.json();
+    if (data.available && data.text) {
+      $('aiText').textContent = data.text;
+      $('aiText').style.color = 'var(--text)';
+      $('aiModel').textContent = data.model ? `via Otari · ${data.model}` : 'via Otari';
+    } else {
+      $('aiText').textContent = data.reason || 'AI explanation unavailable.';
+      $('aiText').style.color = 'var(--muted)';
+    }
+  } catch (err) {
+    $('aiText').textContent = 'AI explanation unavailable: ' + err.message;
+    $('aiText').style.color = 'var(--muted)';
+  }
 }
 </script>
 </body>
